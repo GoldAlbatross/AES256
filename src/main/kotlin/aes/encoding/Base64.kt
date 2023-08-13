@@ -1,17 +1,47 @@
-package aes
+package aes.encoding
 
-internal object Base64 {
-    private const val TABLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+object Base64 {
+    private val TABLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+    private val TABLE_URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_="
     private val DECODE = TABLE.toDecodeArray()
+    private val DECODE_URL = TABLE_URL.toDecodeArray()
 
+    /**
+     * Base64 decodes [v] to a ByteArray. Set [url] to true if [v] is Base64Url encoded.
+     */
+    operator fun invoke(v: String, url: Boolean = false) = decodeIgnoringSpaces(v, url)
+
+    /**
+     * Base64 encodes [v] to a String. Set [url] to true to use Base64Url encoding.
+     */
+    operator fun invoke(v: ByteArray, url: Boolean = false) = encode(v, url)
+
+    /**
+     * Base64 decodes [str] to a ByteArray. Set [url] to true if [str] is Base64Url encoded.
+     */
     fun decode(str: String, url: Boolean = false): ByteArray {
         val src = ByteArray(str.length) { str[it].code.toByte() }
         val dst = ByteArray(src.size)
         return dst.copyOf(decode(src, dst, url))
     }
 
-    private fun decode(src: ByteArray, dst: ByteArray, url: Boolean = false): Int {
-        val decodeArray = DECODE
+    /**
+     * Base64 decodes [str] to a ByteArray after removing spaces, newlines, carriage returns, and tabs.
+     * Set [url] to true if [str] is Base64Url encoded.
+     */
+    fun decodeIgnoringSpaces(str: String, url: Boolean = false): ByteArray {
+        return decode(str.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", ""), url)
+    }
+
+    /**
+     * Base64 decodes [src] to [dst]. Set [url] to true if [src] is Base64Url encoded.
+     */
+    fun decode(src: ByteArray, dst: ByteArray, url: Boolean = false): Int {
+        val decodeArray = if (url) {
+            DECODE_URL
+        } else {
+            DECODE
+        }
 
         var m = 0
         var n = 0
@@ -37,9 +67,18 @@ internal object Base64 {
         return m
     }
 
+    /**
+     * Base64 encodes [src] to a String. Set [url] to true if the Base64Url encoding character set should be used.
+     * If [url] is true, [doPadding] can optionally be set to true to include padding characters in the output.
+     * [doPadding] is ignored if [url] is false.
+     */
     @Suppress("UNUSED_CHANGED_VALUE")
     fun encode(src: ByteArray, url: Boolean = false, doPadding: Boolean = false): String {
-        val encodeTable = TABLE
+        val encodeTable = if (url) {
+            TABLE_URL
+        } else {
+            TABLE
+        }
 
         val out = StringBuilder((src.size * 4) / 3 + 4)
         var ipos = 0
@@ -78,11 +117,21 @@ internal object Base64 {
     private fun ByteArray.readU8(index: Int): Int = this[index].toInt() and 0xFF
     private fun ByteArray.readU24BE(index: Int): Int =
         (readU8(index + 0) shl 16) or (readU8(index + 1) shl 8) or (readU8(index + 2) shl 0)
+}
 
-    private fun String.toDecodeArray(): IntArray = IntArray(0x100).also {
-        for (n in 0..255) it[n] = -1
-        for (n in indices) {
-            it[this[n].code] = n
-        }
+fun String.fromBase64IgnoreSpaces(url: Boolean = false): ByteArray =
+    Base64.decode(this.replace(" ", "").replace("\n", "").replace("\r", ""), url)
+
+fun String.fromBase64(ignoreSpaces: Boolean = false, url: Boolean = false): ByteArray =
+    if (ignoreSpaces) Base64.decodeIgnoringSpaces(this, url) else Base64.decode(this, url)
+
+fun ByteArray.toBase64(url: Boolean = false, doPadding: Boolean = false): String = Base64.encode(this, url, doPadding)
+val ByteArray.base64: String get() = Base64.encode(this)
+val ByteArray.base64Url: String get() = Base64.encode(this, true)
+
+private fun String.toDecodeArray(): IntArray = IntArray(0x100).also {
+    for (n in 0..255) it[n] = -1
+    for (n in indices) {
+        it[this[n].code] = n
     }
 }
